@@ -1,0 +1,8 @@
+.venv
+venv
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+./temp_q3_restore.txt
+.Climate DS Assignment 1 Q3.ipynb
