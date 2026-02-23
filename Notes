@@ -1,0 +1,8 @@
+From slide 45:
+Visual inspection is generally unreliable.
+▶ Even when the true parameter is time-constant, naively
+applying score-driven models may produce pronounced
+time-varying patterns.
+Validate this statement in the assignment.
+▶ Such visual patterns are spurious because no time variation is
+present in the data generating process
