@@ -372,3 +372,139 @@ def compute_aic(log_likelihood, n_params):
 def compute_bic(log_likelihood, n_params, n_obs):
     """Compute BIC"""
     return -2 * log_likelihood + n_params * np.log(n_obs)
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
+def main():
+    """Run all analyses for Question 2(c)."""
+    import matplotlib.pyplot as plt
+
+    output_dir = ROOT / "figures_q2"
+    output_dir.mkdir(exist_ok=True)
+
+    np.random.seed(42)
+
+    T = 500
+    n = 9
+    k = 3
+
+    W_raw = np.random.rand(n, n)
+    np.fill_diagonal(W_raw, 0)
+    W = W_raw / W_raw.sum(axis=1, keepdims=True)
+
+    omega_true = 0.05
+    A_true = 0.05
+    B_true = 0.80
+    beta_true = np.array([0.0, 1.5, -0.5])
+    sigma2_true = 2.0
+    nu_true = 5.0
+
+    t_grid = np.arange(T)
+    rho_true = 0.5 + 0.4 * np.cos(2 * np.pi * t_grid / 200)
+
+    print("QUESTION 2(c): Time-Varying Spatial Score Model")
+    print(f"\nSimulation Setup:")
+    print(f"  T={T}, n={n}, k={k}")
+    print(f"  True params: omega={omega_true}, A={A_true}, B={B_true}")
+    print(f"  Student's t df: {nu_true}")
+
+    print("\nSimulating data ...")
+    y_data, X_data = simulate_spatial_data(
+        T, n, W, rho_true, beta_true, sigma2_true, nu_true
+    )
+    print(f"  Data shape: y={y_data.shape}, X={X_data.shape}")
+
+    print("Estimating spatial score model ...")
+    model = SpatialScoreModel(max_rho=0.99)
+    result = model.fit(y_data, X_data, W, verbose=True)
+
+    print("\nEstimation Results:")
+    print(f"  Convergence: {'Yes' if result.success else 'No'}")
+    print(f"  Log-likelihood: {-result.fun:.2f}")
+    print(f"\n  omega  = {model.params['omega']:.4f}  (true: {omega_true})")
+    print(f"  A      = {model.params['A']:.4f}  (true: {A_true})")
+    print(f"  B      = {model.params['B']:.4f}  (true: {B_true})")
+    print(f"  beta   = {model.params['beta']}")
+    print(f"  sigma2 = {model.params['sigma2']:.4f}  (true: {sigma2_true})")
+    print(f"  nu     = {model.params['nu']:.4f}  (true: {nu_true})")
+
+    rho_unc = model.get_unconditional_mean()
+    print(f"\n  Unconditional mean of rho: {rho_unc:.4f}")
+
+    n_params = len(result.x)
+    print(f"  AIC: {compute_aic(-result.fun, n_params):.2f}")
+    print(f"  BIC: {compute_bic(-result.fun, n_params, T * n):.2f}")
+
+    # ── Figure 1: True vs Filtered rho ──
+    print("\nCreating visualizations ...")
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.plot(rho_true, 'k-', lw=2, label='True', alpha=0.7)
+    ax.plot(model.filtered_rho, 'r--', lw=2, label='Filtered', alpha=0.7)
+    ax.set_xlabel('Time'); ax.set_ylabel(r'$\rho(t)$')
+    ax.set_title('Time-Varying Spatial Dependence: True vs Filtered')
+    ax.legend(); ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "q2c_rho_comparison.png", dpi=150)
+    plt.show(); plt.close()
+
+    # ── Figure 2: Model diagnostics (4-panel) ──
+    fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+
+    axes[0, 0].plot(model.filtered_rho, 'b-', lw=1.5)
+    axes[0, 0].axhline(rho_unc, color='r', ls='--',
+                        label=f'Uncond. mean: {rho_unc:.3f}')
+    axes[0, 0].set_title('Filtered rho'); axes[0, 0].legend(fontsize=9)
+    axes[0, 0].grid(True, alpha=0.3)
+
+    axes[0, 1].hist(model.filtered_rho, bins=30, edgecolor='k', alpha=0.7)
+    axes[0, 1].axvline(rho_unc, color='r', ls='--', lw=2)
+    axes[0, 1].set_title('Distribution of rho')
+    axes[0, 1].grid(True, alpha=0.3, axis='y')
+
+    for i in range(min(3, n)):
+        axes[1, 0].plot(y_data[:, i], alpha=0.7, label=f'Unit {i+1}')
+    axes[1, 0].set_title('Sample time series'); axes[1, 0].legend(fontsize=9)
+    axes[1, 0].grid(True, alpha=0.3)
+
+    residuals = np.zeros((T, n))
+    for t in range(T):
+        residuals[t] = (y_data[t]
+                        - model.filtered_rho[t] * (W @ y_data[t])
+                        - X_data[t] @ model.params['beta'])
+    axes[1, 1].plot(residuals.mean(axis=1), 'g-', lw=1.5)
+    axes[1, 1].axhline(0, color='k', ls='--', lw=1)
+    axes[1, 1].set_title('Average residuals'); axes[1, 1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / "q2c_model_diagnostics.png", dpi=150)
+    plt.show(); plt.close()
+
+    # ── Figure 3: Different rho patterns ──
+    patterns = {
+        'Constant': np.full(T, 0.9),
+        'Sine':     0.5 + 0.4 * np.cos(2 * np.pi * t_grid / 200),
+        'Step':     0.9 - 0.5 * (t_grid > T / 2).astype(float),
+    }
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    for idx, (name, pattern) in enumerate(patterns.items()):
+        y_sim, X_sim = simulate_spatial_data(
+            T, n, W, pattern, beta_true, sigma2_true, nu_true
+        )
+        m = SpatialScoreModel(max_rho=0.99)
+        m.fit(y_sim, X_sim, W, verbose=False)
+        axes[idx].plot(pattern, 'k-', lw=2, label='True', alpha=0.7)
+        axes[idx].plot(m.filtered_rho, 'r--', lw=2, label='Filtered', alpha=0.7)
+        axes[idx].set_title(name); axes[idx].legend(fontsize=9)
+        axes[idx].set_ylim([0, 1]); axes[idx].grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_dir / "q2c_pattern_comparison.png", dpi=150)
+    plt.show(); plt.close()
+
+    print("\nQUESTION 2(c) COMPLETE")
+
+
+if __name__ == "__main__":
+    main()

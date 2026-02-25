@@ -476,3 +476,133 @@ def print_qlr_results(qlr_results):
     print(f"  Critical values   (Table 1, B=[0,0.99], Theta_alpha=[0,1], alpha_L=0):")
     print(f"    10%: {r['cv_10']},  5%: {r['cv_05']},  1%: {r['cv_01']}")
     print(f"  Conclusion: {r['conclusion']}")
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
+def main():
+    """
+    Run all analyses for Question 2(a):
+      1. Estimate the Gaussian score-driven model (main + two alternatives).
+      2. Perform the QLR test for absence of score-driven dynamics.
+      3. Produce figures.
+    """
+    import os, matplotlib.pyplot as plt
+
+    CDS_PATH     = str(ROOT / "data" / "cds_data.xlsx")
+    WEIGHTS_PATH = str(ROOT / "data" / "cds_spatialweights.xlsx")
+
+    Y, Xt_all, W, WY_all, _ = load_data(CDS_PATH, WEIGHTS_PATH)
+    T, n = Y.shape
+    k = K_REGRESSORS
+    print(f"  T = {T},  n = {n},  k = {k}")
+
+    # ── Main specification  (slides p.55) ──
+    print("\nMAIN SPECIFICATION  (slides p.55)")
+    print("  B = [0, 0.99],  Theta_alpha = [0, 1]")
+    print("  h(f) = 0.95 * tanh(f),  sigma in [1, 10]")
+
+    bounds_main = (
+        [(0.0,          2.0),
+         (0.0,          0.99),
+         (0.0,          1.0),
+         (np.log(1.0),  np.log(10.0))]
+        + [(-20.0, 20.0)] * k
+    )
+
+    params_main, ll_main, _ = estimate_gaussian_model(
+        Y, Xt_all, W, WY_all, bounds_main
+    )
+    _, f_main, rho_main = run_filter(
+        *params_main[:4], params_main[4:], Y, Xt_all, W, WY_all
+    )
+    print_estimates("Main specification estimates:", params_main, ll_main, rho_main)
+
+    # ── Alternative 1: wider alpha  [0, 2] ──
+    print("\nALTERNATIVE SPECIFICATION 1")
+    print("  B = [0, 0.99],  Theta_alpha = [0, 2]")
+
+    bounds_alt1 = (
+        [(0.0, 2.0), (0.0, 0.99), (0.0, 2.0), (np.log(1.0), np.log(10.0))]
+        + [(-20.0, 20.0)] * k
+    )
+    params_alt1, ll_alt1, _ = estimate_gaussian_model(
+        Y, Xt_all, W, WY_all, bounds_alt1
+    )
+    _, f_alt1, rho_alt1 = run_filter(
+        *params_alt1[:4], params_alt1[4:], Y, Xt_all, W, WY_all
+    )
+    print_estimates("Alternative 1 estimates:", params_alt1, ll_alt1, rho_alt1)
+
+    # ── Alternative 2: wider beta  [0, 0.999] ──
+    print("\nALTERNATIVE SPECIFICATION 2")
+    print("  B = [0, 0.999],  Theta_alpha = [0, 1]")
+
+    bounds_alt2 = (
+        [(0.0, 2.0), (0.0, 0.999), (0.0, 1.0), (np.log(1.0), np.log(10.0))]
+        + [(-20.0, 20.0)] * k
+    )
+    params_alt2, ll_alt2, _ = estimate_gaussian_model(
+        Y, Xt_all, W, WY_all, bounds_alt2
+    )
+    _, f_alt2, rho_alt2 = run_filter(
+        *params_alt2[:4], params_alt2[4:], Y, Xt_all, W, WY_all
+    )
+    print_estimates("Alternative 2 estimates:", params_alt2, ll_alt2, rho_alt2)
+
+    # ── QLR test (H0: alpha = 0) ──
+    print("\nQLR TEST FOR TIME VARIATION")
+
+    bounds_restricted = (
+        [(0.0, 2.0), (0.0, 0.99), (np.log(1.0), np.log(10.0))]
+        + [(-20.0, 20.0)] * k
+    )
+    qlr_results = qlr_test(
+        ll_main, params_main,
+        Y, Xt_all, W, WY_all,
+        bounds_restricted, beta_U=0.99, alpha_L=0,
+    )
+    print_qlr_results(qlr_results)
+    rho_const = qlr_results['rho_const']
+
+    # ── Figures ──
+    print("\nGenerating figures ...")
+    FIG_DIR.mkdir(exist_ok=True)
+
+    plot_rho_path(
+        rho_main, rho_const, T,
+        save_path=str(FIG_DIR / 'q2a_rho_main.png'),
+    )
+    plot_rho_comparison(
+        [rho_main, rho_alt1, rho_alt2],
+        [f"Main: B=[0,0.99], alpha in [0,1]\nalpha={params_main[2]:.4f}, B={params_main[1]:.4f}",
+         f"Alt 1: alpha in [0,2]\nalpha={params_alt1[2]:.4f}, B={params_alt1[1]:.4f}",
+         f"Alt 2: B=[0,0.999]\nalpha={params_alt2[2]:.4f}, B={params_alt2[1]:.4f}"],
+        rho_const,
+        save_path=str(FIG_DIR / 'q2a_rho_comparison.png'),
+    )
+
+    # ── Summary table ──
+    print(f"\n{'Specification':<30} {'omega':>8} {'beta':>8} {'alpha':>8} "
+          f"{'sigma':>8} {'LL':>14}")
+    print("-" * 80)
+    for label, p, ll in [
+        ("Main (B=[0,.99], a in [0,1])", params_main, ll_main),
+        ("Alt 1 (a in [0,2])",           params_alt1, ll_alt1),
+        ("Alt 2 (B=[0,.999])",           params_alt2, ll_alt2),
+    ]:
+        print(f"{label:<30} {p[0]:>8.4f} {p[1]:>8.4f} {p[2]:>8.4f} "
+              f"{np.exp(p[3]):>8.4f} {ll:>14.4f}")
+
+    r = qlr_results
+    print(f"\nQLR test (main spec):  QLRT={r['QLRT']:.4f},  "
+          f"kappa_hat={r['kappa_hat']:.6f},  QLR_tilde={r['QLR_tilde']:.4f},  "
+          f"CV(1%)={r['cv_01']}")
+    print(f"  {r['conclusion']}")
+    print("\nQUESTION 2(a) COMPLETE")
+
+
+if __name__ == "__main__":
+    main()
