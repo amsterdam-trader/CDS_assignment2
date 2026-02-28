@@ -20,18 +20,10 @@ data = pd.read_excel(ROOT / "data" / "cds_spatialweights.xlsx")
 # Project paths
 ROOT = Path(__file__).resolve().parents[1]
 
-
 class SpatialScoreModel:
     """
     Time-varying Spatial Durbin Model with score-driven dynamics
     
-    Model:
-        y_t = ρ_t * W * y_t + X_t * β + e_t
-        e_t ~ t_λ(0, Σ)
-        
-    Score dynamics:
-        f_{t+1} = ω + A * s_t + B * f_t
-        ρ_t = tanh(f_t)
     """
     
     def __init__(self, max_rho=0.99):
@@ -46,7 +38,6 @@ class SpatialScoreModel:
         self.filtered_f = None
         
     def transform_rho(self, f):
-        """Transform f to ρ ∈ (-max_rho, max_rho)"""
         return self.max_rho * np.tanh(f)
     
     def transform_rho_derivative(self, f):
@@ -91,7 +82,6 @@ class SpatialScoreModel:
         """
         Compute log-likelihood for time t with Student's t errors
         
-        Equation (9) from the paper
         """
         n = len(y)
         rho = self.transform_rho(f)
@@ -118,30 +108,6 @@ class SpatialScoreModel:
     def filter_rho(self, y_data, X_data, W, omega, A, B, beta, sigma2, nu, f_init=0.0):
         """
         Filter the time-varying spatial dependence parameter
-        
-        Parameters:
-        y_data : array (T, n)
-            Dependent variable panel data
-        X_data : array (T, n, k)
-            Regressors panel data
-        W : array (n, n)
-            Spatial weights matrix
-        omega, A, B : float
-            Score dynamics parameters
-        beta : array (k,)
-            Regression coefficients
-        sigma2 : float
-            Error variance
-        nu : float
-            Degrees of freedom for Student's t
-        f_init : float
-            Initial value for f_1
-            
-        Returns:
-        f_filtered : array (T,)
-            Filtered values of f_t
-        rho_filtered : array (T,)
-            Filtered values of ρ_t
         """
         T = y_data.shape[0]
         f_filtered = np.zeros(T)
@@ -170,9 +136,6 @@ class SpatialScoreModel:
         """
         Negative log-likelihood for optimization
         
-        Parameters:
-        params : array
-            [omega, A, B, beta_0, ..., beta_k, log(sigma2), log(nu)]
         """
         T, n = y_data.shape
         k = X_data.shape[2]
@@ -210,29 +173,7 @@ class SpatialScoreModel:
     def fit(self, y_data, X_data, W, initial_params=None, f_init=0.0, 
             method='L-BFGS-B', maxiter=1000, verbose=False):
         """
-        Estimate model parameters via Maximum Likelihood
-        
-        Parameters:
-        y_data : array (T, n)
-            Dependent variable panel data
-        X_data : array (T, n, k)
-            Regressors panel data
-        W : array (n, n)
-            Spatial weights matrix
-        initial_params : array, optional
-            Initial parameter values
-        f_init : float
-            Initial value for f_1
-        method : str
-            Optimization method
-        maxiter : int
-            Maximum iterations
-        verbose : bool
-            Print optimization progress
-            
-        Returns:
-        result : OptimizeResult
-            Optimization result object
+        Fit the spatial score model by maximizing the log-likelihood
         """
         T, n = y_data.shape
         k = X_data.shape[2]
@@ -317,29 +258,6 @@ def simulate_spatial_data(T, n, W, rho_process, beta, sigma2, nu, X_data=None):
     """
     Simulate data from spatial model
     
-    Parameters:
-    T : int
-        Number of time periods
-    n : int
-        Number of cross-sectional units
-    W : array (n, n)
-        Spatial weights matrix
-    rho_process : array (T,)
-        Time-varying spatial correlation
-    beta : array (k,)
-        Regression coefficients
-    sigma2 : float
-        Error variance
-    nu : float
-        Degrees of freedom
-    X_data : array (T, n, k), optional
-        Regressors (if None, standard normal)
-        
-    Returns:
-    y_data : array (T, n)
-        Simulated dependent variable
-    X_data : array (T, n, k)
-        Regressors
     """
     k = len(beta)
     
