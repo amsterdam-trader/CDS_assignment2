@@ -509,7 +509,7 @@ def main():
          (0.0,          0.99),
          (0.0,          1.0),
          (np.log(1.0),  np.log(10.0))]
-        + [(-20.0, 20.0)] * k
+        + [(-10.0, 10.0)] * k
     )
 
     params_main, ll_main, _ = estimate_gaussian_model(
