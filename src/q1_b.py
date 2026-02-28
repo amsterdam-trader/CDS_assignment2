@@ -201,6 +201,14 @@ def plot_hist(arr: np.ndarray, true_value: float, title: str, xlabel: str, outpa
     plt.savefig(outpath, dpi=200)
     plt.close()
 
+def bias_var_mse(x: np.ndarray, true: float) -> tuple[float, float, float]:
+    """Overview table of the bias/variance (and MSE)."""
+    mean = float(np.mean(x))
+    var = float(np.var(x, ddof=1))
+    bias = mean - true
+    mse = bias**2 + var
+    return bias, var, mse
+
 
 def main() -> None:
     # -----------------------------
@@ -218,6 +226,7 @@ def main() -> None:
     # Run experiments
     # -----------------------------
     all_results = {}
+    rows = []
 
     for n in ns:
         for norm in normalizations:
@@ -231,6 +240,12 @@ def main() -> None:
                 seed=seed,
             )
             all_results[(n, norm)] = res
+
+            b_rho, v_rho, mse_rho = bias_var_mse(res["rho_hat"], rho_true)
+            b_s2, v_s2, mse_s2 = bias_var_mse(res["sigma2_hat"], sigma2_true)
+
+            rows.append(("rho", norm, n, b_rho, v_rho, mse_rho))
+            rows.append(("sigma2", norm, n, b_s2, v_s2, mse_s2))
 
             # Summary stats
             print(f"rho_hat:   mean={res['rho_hat'].mean():.4f}, std={res['rho_hat'].std(ddof=1):.4f}")
@@ -251,6 +266,12 @@ def main() -> None:
                 xlabel=r"$\hat{\sigma}^2$",
                 outpath=FIG_DIR / f"q1b_sigma2hat_n{n}_{norm}.png",
             )
+
+    print("\n Latex table of the bias/variance (and MSE):")
+    for par, norm, n, b, v, mse in rows:
+        label = r"$\hat{\rho}$" if par == "rho" else r"$\hat{\sigma}^2$"
+        norm_label = "Row" if norm == "row" else "Spectral"
+        print(f"{label} & {norm_label} & {n} & {b:+.4f} & {v:.4f} & {mse:.4f} \\\\")
 
     print("\nDone. Figures saved to:", FIG_DIR)
 
