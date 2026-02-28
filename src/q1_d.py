@@ -2,7 +2,6 @@
 
 # Question 1d
 import numpy as np
-import pandas as pd 
 from pathlib import Path
 from numpy.linalg import slogdet
 from scipy.optimize import minimize_scalar
@@ -13,8 +12,6 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parents[1]
 FIG_DIR = ROOT / "figures_q1"
 FIG_DIR.mkdir(exist_ok=True)
-
-data = pd.read_csv(ROOT / "data" / "iowa_yield_05_10.csv")
 
 # --------------------------------------------------------------------------------------
 # Construction Weight Matrices
@@ -130,7 +127,7 @@ def run_mc(n: int, Wtype: str, reps: int, rho_true: float = 0.5, sigma2_true: fl
     sigma2_hats = np.empty(reps)
 
     for r in range(reps):
-        # New W each replication (as in the assignment)
+        # Dense W: redrawn each replication; Sparse W: fixed deterministic neighbor structure        
         if Wtype == "dense":
             W0 = make_W_dense(n, rng)
             W = row_normalize(W0)
