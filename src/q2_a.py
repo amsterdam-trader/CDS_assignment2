@@ -16,11 +16,6 @@ ROOT = Path(__file__).resolve().parents[1]
 FIG_DIR = ROOT / "figures_q2"
 FIG_DIR.mkdir(exist_ok=True)
 
-data = pd.read_csv(ROOT / "data" / "iowa_yield_05_10.csv")
-
-# Project paths
-ROOT = Path(__file__).resolve().parents[1]
-
 # Constants
 RHO_MAX = 0.95   # link function bound (slides p.55)
 N_COUNTRIES = 8
@@ -509,7 +504,7 @@ def main():
          (0.0,          0.99),
          (0.0,          1.0),
          (np.log(1.0),  np.log(10.0))]
-        + [(-20.0, 20.0)] * k
+        + [(-10.0, 10.0)] * k
     )
 
     params_main, ll_main, _ = estimate_gaussian_model(
@@ -526,7 +521,7 @@ def main():
 
     bounds_alt1 = (
         [(0.0, 2.0), (0.0, 0.99), (0.0, 2.0), (np.log(1.0), np.log(10.0))]
-        + [(-20.0, 20.0)] * k
+        + [(-10.0, 10.0)] * k
     )
     params_alt1, ll_alt1, _ = estimate_gaussian_model(
         Y, Xt_all, W, WY_all, bounds_alt1
@@ -542,7 +537,7 @@ def main():
 
     bounds_alt2 = (
         [(0.0, 2.0), (0.0, 0.999), (0.0, 1.0), (np.log(1.0), np.log(10.0))]
-        + [(-20.0, 20.0)] * k
+        + [(-10.0, 10.0)] * k
     )
     params_alt2, ll_alt2, _ = estimate_gaussian_model(
         Y, Xt_all, W, WY_all, bounds_alt2
@@ -557,7 +552,7 @@ def main():
 
     bounds_restricted = (
         [(0.0, 2.0), (0.0, 0.99), (np.log(1.0), np.log(10.0))]
-        + [(-20.0, 20.0)] * k
+        + [(-10.0, 10.0)] * k
     )
     qlr_results = qlr_test(
         ll_main, params_main,
