@@ -8,8 +8,6 @@ from pathlib import Path
 from scipy.optimize import minimize
 from scipy.special import gammaln
 import matplotlib.pyplot as plt
-import warnings
-warnings.filterwarnings('ignore')
 
 from q2_a import (load_data, link, link_dot, link_ddot,
                    K_REGRESSORS, RHO_MAX)
@@ -19,21 +17,12 @@ FIG_DIR = ROOT / "figures_q2"
 FIG_DIR.mkdir(exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
 # Multivariate t score-driven filter
-# ---------------------------------------------------------------------------
 
 def run_t_filter(omega, B, alpha, sigma2, nu, beta_reg,
                  Y, Xt_all, W, WY_all):
     """
     Multivariate t score-driven filter for the spatial spillover parameter.
-
-    Model:    y_t = ρ_t W y_t + X_t β + e_t,  e_t ~ t_ν(0, σ²I_n)
-    Link:     ρ_t = h(f_t) = 0.95 tanh(f_t)
-    Dynamics: f_{t+1} = ω(1−B) + B f_t + α s_t
-
-    Score:    s_t = [w_t σ⁻² (Wy_t)ʹe_t − tr(S_t⁻¹W)] ḣ(f_t)
-    Weight:   w_t = (ν+n) / (ν + Q_t),  Q_t = eʹe / σ²
     """
     T, n = Y.shape
     I_n = np.eye(n)
@@ -75,12 +64,7 @@ def run_t_filter(omega, B, alpha, sigma2, nu, beta_reg,
     return total_ll, f, rho
 
 
-# ---------------------------------------------------------------------------
-# Negative log-likelihoods for optimization
-# ---------------------------------------------------------------------------
-
 def _neg_loglik_t(params, Y, Xt_all, W, WY_all):
-    """Unrestricted: params = [omega, B, alpha, log_sigma, log_nu, beta_reg…]"""
     sigma2 = np.exp(2.0 * params[3])
     nu = np.exp(params[4])
     ll, _, _ = run_t_filter(params[0], params[1], params[2],
@@ -90,7 +74,7 @@ def _neg_loglik_t(params, Y, Xt_all, W, WY_all):
 
 
 def _neg_loglik_t_restricted(params, Y, Xt_all, W, WY_all):
-    """Restricted (α = 0, constant ρ): [omega, B (unused), log_sigma, log_nu, beta_reg…]"""
+    """Restricted """
     omega = params[0]
     sigma2 = np.exp(2.0 * params[2])
     nu = np.exp(params[3])
@@ -161,21 +145,9 @@ def estimate_t_model(Y, Xt_all, W, WY_all, bounds, n_starts=6):
     return best_params, best_ll, results_list
 
 
-# ---------------------------------------------------------------------------
-# κ̂ scaling factor for the scaled QLR test (slides pp. 51–53)
-#
-# ∇ᶠₜ(f, ϕ) = [w_t σ⁻² (Wy_t)ʹe_t − tr(S⁻¹W)] ḣ(f)
-#
-# ∇ᶠᶠₜ(f, ϕ) = [w_t σ⁻² (Wy_t)ʹe_t − tr(S⁻¹W)] ḧ(f)
-#   + [2w²_t/((ν+n)σ⁴)·((Wy_t)ʹe_t)²
-#      − w_t σ⁻² yʹW'Wy − tr((S⁻¹W)²)] · (ḣ(f))²
-#
-# κ̂ = [−T⁻¹ Σ_t ∇ᶠᶠₜ]⁻¹ · [T⁻¹ Σ_t (∇ᶠₜ)²]
-# ---------------------------------------------------------------------------
-
 def compute_kappa_hat_t(omega_r, log_sig_r, log_nu_r, beta_reg_r,
                         Y, Xt_all, W, WY_all):
-    """Compute the scaling factor κ̂ at the restricted (constant-ρ) estimates."""
+    """Compute the scaling factor kappa_hat at the restricted estimates."""
     T, n = Y.shape
     rho_r = link(omega_r)
     sigma2 = np.exp(2.0 * log_sig_r)
@@ -223,8 +195,7 @@ def compute_kappa_hat_t(omega_r, log_sig_r, log_nu_r, beta_reg_r,
 def qlr_test_t(ll_unrestricted, params_opt, Y, Xt_all, W, WY_all,
                bounds_restricted, beta_U=0.99, alpha_L=0):
     """
-    QLR test for absence of score-driven dynamics (H0: α = 0)
-    using multivariate t dynamics with Σ = σ²Iₙ.
+    QLR test for absence of score-driven dynamics
     """
     k = K_REGRESSORS
     omega_m = params_opt[0]
@@ -267,12 +238,7 @@ def qlr_test_t(ll_unrestricted, params_opt, Y, Xt_all, W, WY_all,
                                     Y, Xt_all, W, WY_all)
     QLR_tilde = QLRT / kappa_hat
 
-    # Critical values from Table 1 of the assignment.
-    # B = [0, 0.99] ≈ β_U = 0.990,  Θ_α = [0, α_U] with α_L = 0.
-    # Row: β_L = 0, β_U = 0.990, α_L = 0  →  10%: 3.266, 5%: 4.613, 1%: 7.696
-    # These critical values depend only on B and Θ_α, NOT on the
-    # distributional assumption (Gaussian vs t); the scaling κ̂ accounts
-    # for potential misspecification (Case 2, slide 51).
+    # critical values from Table 1 of the assignment
     cv_10, cv_05, cv_01 = 3.266, 4.613, 7.696
 
     if QLR_tilde >= cv_01:
@@ -340,7 +306,7 @@ def print_qlr_results_t(r):
 # ---------------------------------------------------------------------------
 
 def main():
-    """Full analysis for Question 2(d)."""
+    """analysis for Question 2(d)."""
     print("=" * 60)
     print("QUESTION 2(d): QLR test with multivariate t dynamics")
     print("=" * 60)
@@ -352,10 +318,6 @@ def main():
     k = K_REGRESSORS
     print(f"  T = {T},  n = {n},  k = {k}")
 
-    # ── Specification ──
-    # Same parameter spaces as Part (a), plus ν for the t-distribution.
-    # B = [0, 0.99],  Θ_α = [0, 1],  h(f) = 0.95·tanh(f)
-    # σ ∈ [1, 10],  ν ∈ [3, 200]
     print("\nSpecification:")
     print("  B = [0, 0.99],  Theta_alpha = [0, 1]")
     print("  h(f) = 0.95 * tanh(f)")
@@ -367,7 +329,7 @@ def main():
          (0.0, 1.0),                         # alpha
          (np.log(1.0), np.log(10.0)),        # log_sigma
          (np.log(3.0), np.log(200.0))]       # log_nu
-        + [(-20.0, 20.0)] * k               # beta_reg
+        + [(-10.0, 10.0)] * k               # beta_reg
     )
 
     # ── Unrestricted estimation ──
@@ -391,7 +353,7 @@ def main():
          (0.0, 0.99),                        # B (irrelevant under H0)
          (np.log(1.0), np.log(10.0)),        # log_sigma
          (np.log(3.0), np.log(200.0))]       # log_nu
-        + [(-20.0, 20.0)] * k               # beta_reg
+        + [(-10.0, 10.0)] * k               # beta_reg
     )
 
     qlr = qlr_test_t(

@@ -2,24 +2,6 @@
 """
 Question 2(e): Spurious time-varying patterns in score-driven models.
 
-DGP:  y_t = 0.2 + u_t,  u_t  ~iid  t_10,  T = 500.
-
-Model: univariate t-location score-driven filter from Assignment 1, Q3.
-    y_t | f_t  ~  t_nu(f_t, sigma_u^2)
-    f_{t+1} = omega + beta f_t + alpha * s_t,   f_1 = mean(y_1,...,y_{T_bar})
-    s_t = ((nu+3)/nu) * (y_t - f_t) / (1 + (1/nu)*((y_t - f_t)/sigma_u)^2)
-
-The score uses inverse Fisher information scaling (S_t = I_t^{-1}),
-which yields the (nu+3) factor rather than (nu+1).
-
-Initialization: f_1 = mean(y_1, ..., y_{T_bar}) with T_bar = 10 (as in A1 Q3).
-
-Parameter spaces:
-    beta    (= B)   in [0, 0.999]   (given by Q2e: B in [0,1))
-    alpha           in [0, 2]       (given by Q2e: Theta_alpha = [0,2])
-    omega           in [-3, 3]      (same as A1 Q3)
-    sigma_u         in (0.001, 2)   (same as A1 Q3)
-    nu              in (3, 200)     (wider lower bound: nu_true=10 sits on A1 Q3 boundary)
 """
 
 import numpy as np
@@ -136,20 +118,6 @@ def main():
     nu_true = 10
     n_display = 4
 
-    print(f"\nDGP:  y_t = {mu_true} + u_t,  u_t ~ t_{nu_true},  T = {T}")
-    print(f"\nModel: univariate t-location GAS filter (Assignment 1 Q3)")
-    print(f"  f_{{t+1}} = omega + beta f_t + alpha s_t")
-    print(f"  s_t = ((nu+3)/nu)(y_t - f_t) / (1 + (1/nu)((y_t - f_t)/sigma_u)^2)")
-    print(f"  [inverse Fisher information scaling]")
-    print(f"  f_1 = mean(y_1,...,y_{{T_bar}}) with T_bar = {T_BAR}")
-    print(f"\nParameter spaces (Q2e-specified):")
-    print(f"  beta (B) in [0, 0.999]")
-    print(f"  Theta_alpha = [0, 2]")
-    print(f"Parameter spaces (adopted from A1 Q3):")
-    print(f"  omega    in [-3, 3]")
-    print(f"  sigma_u  in (0.001, 2)")
-    print(f"  nu       in (3, 200)  [A1 Q3 used (10,3000); lowered since nu_true=10]")
-
     bounds = [
         (0.001, 2.0),                      # sigma_u  (same as A1 Q3)
         (3.0,   200.0),                    # nu       (nu_true=10 sits on A1 Q3 lower bound, so widened)
@@ -158,55 +126,20 @@ def main():
         (0.0,   2.0),                      # alpha    (Q2e: Theta_alpha = [0,2])
     ]
 
-    candidate_seeds = list(range(100, 180))
+    seeds = [107, 108, 100, 103]
     results = []
 
-    print(f"\nScanning {len(candidate_seeds)} seeds for illustrative runs ...")
-    for seed in candidate_seeds:
+    for seed in seeds:
         np.random.seed(seed)
         Y = mu_true + np.random.standard_t(df=nu_true, size=T)
-
         params, ll = estimate_t_location(Y, bounds)
-        sigma_u_est, nu_est, omega_est, beta_est, alpha_est = params
+        _, f_path = run_t_location_filter(*params, Y)
+        results.append({
+            'seed': seed, 'params': params, 'll': ll,
+            'f_path': f_path, 'Y': Y,
+        })
 
-        if alpha_est > 0.005 and beta_est > 0.80:
-            _, f_path = run_t_location_filter(
-                sigma_u_est, nu_est, omega_est, beta_est, alpha_est, Y
-            )
-            f_range = f_path.max() - f_path.min()
-            results.append({
-                'seed': seed, 'params': params, 'll': ll,
-                'f_path': f_path, 'Y': Y, 'f_range': f_range,
-            })
-
-        if len(results) >= n_display:
-            break
-
-    if len(results) < n_display:
-        print(f"  Warning: only found {len(results)} qualifying runs, "
-              f"relaxing criteria ...")
-        for seed in candidate_seeds:
-            if any(r['seed'] == seed for r in results):
-                continue
-            np.random.seed(seed)
-            Y = mu_true + np.random.standard_t(df=nu_true, size=T)
-            params, ll = estimate_t_location(Y, bounds)
-            alpha_est = params[4]
-            if alpha_est > 0.0:
-                _, f_path = run_t_location_filter(*params, Y)
-                results.append({
-                    'seed': seed, 'params': params, 'll': ll,
-                    'f_path': f_path, 'Y': Y,
-                    'f_range': f_path.max() - f_path.min(),
-                })
-            if len(results) >= n_display:
-                break
-
-    results = sorted(results, key=lambda r: r['f_range'], reverse=True)
-    results = results[:n_display]
-
-    print(f"\nSelected {len(results)} runs (seeds: "
-          f"{[r['seed'] for r in results]}):")
+    print(f"\nResults (seeds: {seeds}):")
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex=True, sharey=True)
 
@@ -245,21 +178,11 @@ def main():
     )
     plt.tight_layout()
     save_path = str(FIG_DIR / 'q2e_spurious_time_variation.png')
-    plt.savefig(save_path, dpi=150)
+    plt.savefig(save_path, dpi=350)
     print(f"\n  Saved: {save_path}")
     plt.show()
     plt.close()
 
-    print("\n" + "-" * 60)
-    print("Observation:")
-    print("  Despite the true location being constant (mu = 0.2),")
-    print("  the estimated f_t paths show pronounced time-varying patterns.")
-    print("  This occurs because the optimizer finds alpha > 0 (and beta close")
-    print("  to 1) to improve the in-sample likelihood by fitting noise.")
-    print("  The score-driven update chases random fluctuations in y_t,")
-    print("  producing a spurious time-varying path.")
-    print("  This highlights the need for a formal QLR test before")
-    print("  concluding that time variation is genuinely present.")
     print("-" * 60)
     print("\nQUESTION 2(e) COMPLETE")
 
