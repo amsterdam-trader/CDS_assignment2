@@ -51,7 +51,6 @@ The project uses relative paths, so everything works as long as you:
 All figures are automatically saved to:
 - `figures_q1/` - Question 1 outputs
 - `figures_q2/` - Question 2 outputs  
-- `figures_q3/` - Question 3 outputs
 
 ## Troubleshooting
 
